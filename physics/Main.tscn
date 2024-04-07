@@ -1,0 +1,144 @@
+[gd_scene load_steps=8 format=2]
+
+[ext_resource path="res://physics/Player.tscn" type="PackedScene" id=1]
+[ext_resource path="res://physics/Main.gd" type="Script" id=2]
+[ext_resource path="res://physics/Crate.tscn" type="PackedScene" id=3]
+
+[sub_resource type="RectangleShape2D" id=2]
+extents = Vector2( 522.5, 174 )
+
+[sub_resource type="RectangleShape2D" id=3]
+extents = Vector2( 623, 115 )
+
+[sub_resource type="RectangleShape2D" id=4]
+extents = Vector2( 188.5, 465.5 )
+
+[sub_resource type="RectangleShape2D" id=5]
+extents = Vector2( 202.5, 380.5 )
+
+[node name="Main" type="Node2D"]
+script = ExtResource( 2 )
+
+[node name="help_msg" type="Label" parent="."]
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+margin_left = 209.0
+margin_top = 12.0
+margin_right = 549.0
+margin_bottom = 43.0
+text = "Press esc button to show control panel. 
+Press left/right/up/down button to move the cube."
+
+[node name="controls" type="GridContainer" parent="."]
+margin_left = 5.0
+margin_top = 5.0
+margin_right = 173.0
+margin_bottom = 133.0
+columns = 2
+
+[node name="ip_label" type="Label" parent="controls"]
+margin_top = 5.0
+margin_right = 81.0
+margin_bottom = 19.0
+text = "IP"
+
+[node name="ip" type="LineEdit" parent="controls"]
+margin_left = 85.0
+margin_right = 159.0
+margin_bottom = 24.0
+text = "127.0.0.1"
+
+[node name="port_label" type="Label" parent="controls"]
+margin_top = 33.0
+margin_right = 81.0
+margin_bottom = 47.0
+text = "port"
+
+[node name="port" type="SpinBox" parent="controls"]
+margin_left = 85.0
+margin_top = 28.0
+margin_right = 159.0
+margin_bottom = 52.0
+min_value = 1024.0
+max_value = 65534.0
+value = 3000.0
+
+[node name="start_button" type="Button" parent="controls"]
+margin_top = 56.0
+margin_right = 81.0
+margin_bottom = 76.0
+text = "StartServer"
+
+[node name="connect_button" type="Button" parent="controls"]
+margin_left = 85.0
+margin_top = 56.0
+margin_right = 159.0
+margin_bottom = 76.0
+text = "Connect"
+
+[node name="Player" parent="." instance=ExtResource( 1 )]
+position = Vector2( 397, 234 )
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2( 395, 246 )
+zoom = Vector2( 0.5, 0.5 )
+
+[node name="walls" type="Node" parent="."]
+
+[node name="up_wall" type="StaticBody2D" parent="walls"]
+
+[node name="up_colli" type="CollisionShape2D" parent="walls/up_wall"]
+position = Vector2( 410.5, -173 )
+shape = SubResource( 2 )
+
+[node name="down_wall" type="StaticBody2D" parent="walls"]
+
+[node name="down_colli" type="CollisionShape2D" parent="walls/down_wall"]
+position = Vector2( 473, 712 )
+shape = SubResource( 3 )
+
+[node name="left_wall" type="StaticBody2D" parent="walls"]
+
+[node name="left_colli" type="CollisionShape2D" parent="walls/left_wall"]
+position = Vector2( -187.5, 327.5 )
+shape = SubResource( 4 )
+
+[node name="right_wall" type="StaticBody2D" parent="walls"]
+
+[node name="right_colli" type="CollisionShape2D" parent="walls/right_wall"]
+position = Vector2( 1002, 272 )
+shape = SubResource( 5 )
+
+[node name="crate" type="Node" parent="."]
+
+[node name="Crate" parent="crate" instance=ExtResource( 3 )]
+position = Vector2( 971, -294 )
+
+[node name="Crate2" parent="crate" instance=ExtResource( 3 )]
+position = Vector2( 456, -102 )
+
+[node name="Crate3" parent="crate" instance=ExtResource( 3 )]
+position = Vector2( 468, 67 )
+
+[node name="Crate4" parent="crate" instance=ExtResource( 3 )]
+position = Vector2( 639, 75 )
+
+[node name="Crate5" parent="crate" instance=ExtResource( 3 )]
+position = Vector2( 830, 70 )
+
+[node name="Crate6" parent="crate" instance=ExtResource( 3 )]
+position = Vector2( 1007, 74 )
+
+[node name="Crate7" parent="crate" instance=ExtResource( 3 )]
+position = Vector2( 954, -183 )
+
+[node name="Crate8" parent="crate" instance=ExtResource( 3 )]
+position = Vector2( 717, -315 )
+
+[node name="Crate9" parent="crate" instance=ExtResource( 3 )]
+position = Vector2( 454, -260 )
+
+[connection signal="pressed" from="controls/start_button" to="." method="_on_start_button_pressed"]
+[connection signal="pressed" from="controls/connect_button" to="." method="_on_connect_button_pressed"]
