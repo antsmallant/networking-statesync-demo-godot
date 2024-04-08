@@ -6,6 +6,17 @@ const MODE_SERVER = "server"
 const MODE_CLIENT = "client"
 const ROOM_PLAYER_CNT = 2
 const UPDATE_DELTATIME = 30  # every 30 milliseconds a frame
+const NETWORK_FPS = 40
+
+const TT = {
+	g2c_connect = "g2c_connect",
+	g2c_gamestart = "g2c_gamestart",
+	g2c_obj_update = "g2c_obj_update",
+	g2c_cli_input = "g2c_cli_input",
+	
+	c2g_connect = "c2g_connect",
+	c2g_input = "c2g_input",
+}
 
 var mode = null
 var is_started = false
@@ -13,30 +24,29 @@ var is_started = false
 var svr_peer = PacketPeerUDP.new()
 var cli_peer = PacketPeerUDP.new()
 
-var game_room : GameRoom = GameRoom.new()
 
 # For server
-var clients = []
-var svr_tick = 0
-var svr_history_frames = {}
-var svr_game_start_time : int = -1
+var svr_clients = []
+var svr_cli_input_buffer := []
+
 
 # For client
-var cli_max_svr_tick = 0
 var cli_game_start_time : int = -1
-var cli_pre_send_input_cnt : int = 1
-var cli_input_tick = 0
-var cli_tick_since_game_start : int = 0
-var cli_world_tick : int = 0
-var cli_cur_svr_tick : int = -1
-var cli_svr_frames = {}
-var cli_has_recv_frame := false
+var cli_seq := -1
+var cli_recv_input_buffer := []
+
+
+# For both server and client
+var net_sync_timer : float = 0.0
+
 
 # nodes
 var ctrl_ip
 var ctrl_port
 var ctrl_start
 var ctrl_connect
+var ctrl_balls
+var ctrl_player
 
 
 # Called when the node enters the scene tree for the first time.
@@ -46,6 +56,8 @@ func _ready():
 	ctrl_port = get_node("controls/port")
 	ctrl_start = get_node("controls/start_button")
 	ctrl_connect = get_node("controls/connect_button")
+	ctrl_balls = get_node("balls").get_children()
+	ctrl_player = get_node("Player")
 
 
 # warning-ignore:unused_argument
@@ -71,10 +83,7 @@ func _physics_process(delta):
 
 
 func reset_on_start():
-	clients = []
-	svr_tick = 0
-	svr_history_frames = {}
-	svr_game_start_time = -1	
+	svr_clients = []
 	
 
 func set_mode(_mode):
@@ -141,25 +150,14 @@ func svr_on_stop():
 	ctrl_ip.set_editable(true)
 	ctrl_port.set_editable(true)
 	ctrl_start.set_text("StartServer")
-	ctrl_connect.set_disabled(false)
-
-
-func svr_broad_inputs(tick, inputs):
-	var packet = {
-		t = "g2c_frame",
-		tick = tick,
-		inputs = inputs,
-	}
-			
-	svr_broad(packet)		
+	ctrl_connect.set_disabled(false)	
 				
 				
 func svr_broad(packet):
-	for client in clients:
+	for client in svr_clients:
 		svr_peer.set_dest_address(client.ip, client.port)
 		svr_peer.put_var(packet)	
-		
-				
+						
 				
 # warning-ignore:unused_argument
 func svr_cycle(delta):
@@ -169,33 +167,52 @@ func svr_cycle(delta):
 
 # warning-ignore:unused_argument
 func svr_do_update(delta):
-	if svr_game_start_time <= 0:
+	var duration = 1.0 / NETWORK_FPS
+	if (net_sync_timer < duration):
+		net_sync_timer += delta
 		return
+	net_sync_timer = 0
 
-	while svr_tick < svr_get_tick_since_game_start():
-		svr_chk_broad_inputs(true)
+	# apply client inputs
+	var tmp_buf = svr_cli_input_buffer
+	svr_cli_input_buffer = []
+
+	for buf in tmp_buf:
+		var packet = buf.packet
+		var input = packet.input
+		if input.has("dir"):
+			$Player.apply_input(input.dir)
+
+	svr_broad({
+		t = TT.g2c_cli_input,
+		inputs = tmp_buf,		
+	})
 
 
-func svr_get_tick_since_game_start():
-	if svr_game_start_time <= 0:
-		return 0
-	var tick = floor( (Time.get_ticks_msec() - svr_game_start_time) / UPDATE_DELTATIME )
-	return tick
-
-		
-func svr_chk_broad_inputs(is_force = false):
-	var frame = svr_get_or_create_frame(svr_tick)
-
-	if not is_force:
-		if frame["inputs"].size() < ROOM_PLAYER_CNT:
-			return
-
-	var inputs = frame["inputs"]
-	svr_broad_inputs(svr_tick,  inputs)
-	svr_tick += 1
-
-	if svr_game_start_time <= 0:
-		svr_game_start_time = Time.get_ticks_msec()
+	# sync object state
+	for client in svr_clients:
+		var packet = {
+			t = TT.g2c_obj_update,
+			seq = client.seq,
+			balls = [],
+			player = {
+				position = ctrl_player.get_position(), 
+				rotation = ctrl_player.get_rotation(), 
+				linear_velocity = ctrl_player.get_linear_velocity(), 
+				angular_velocity = ctrl_player.get_angular_velocity(),					
+			},
+		}
+		client.seq += 1
+		for ball in ctrl_balls:
+			packet.balls.append({
+				name = ball.get_name(), 
+				position = ball.get_position(), 
+				rotation = ball.get_rotation(), 
+				linear_velocity = ball.get_linear_velocity(), 
+				angular_velocity = ball.get_angular_velocity(),
+			})
+		svr_peer.set_dest_address(client.ip, client.port)
+		svr_peer.put_var(packet)
 
 
 func svr_do_recv():
@@ -203,9 +220,9 @@ func svr_do_recv():
 		var packet = svr_peer.get_var()
 		if packet == null:
 			continue
-		if packet.t == "c2g_connect":
+		if packet.t == TT.c2g_connect:
 			svr_on_c2g_connect(packet)
-		elif packet.t == "c2g_input":
+		elif packet.t == TT.c2g_input:
 			svr_on_c2g_input(packet)		
 
 
@@ -215,64 +232,43 @@ func svr_on_c2g_connect(packet):
 	var packet_port = svr_peer.get_packet_port()
 	if (not svr_has_cli(packet_ip, packet_port)):
 		print("Client connected from ", packet_ip, ":", packet_port)
-		clients.append({ ip = packet_ip, port = packet_port, seq = 0 })
+		svr_clients.append({ ip = packet_ip, port = packet_port, seq = 0 })
 
 	svr_peer.set_dest_address(packet_ip, packet_port)
-	svr_peer.put_var({t = "g2c_connect"})
-	
-	if svr_get_player_cnt() == ROOM_PLAYER_CNT:
-		svr_start_game()
+	svr_peer.put_var({t = TT.g2c_connect})
+
+	svr_peer.set_dest_address(packet_ip, packet_port)
+	svr_peer.put_var({t = TT.g2c_gamestart})
 	
 
 func svr_on_c2g_input(packet):
 	var packet_ip = svr_peer.get_packet_ip()
-	var packet_port = svr_peer.get_packet_port()	
-	if packet.tick < svr_tick:
-		print("svr_on_c2g_input recv old packet, packet:", packet, ", svr_tick:", 
-			svr_tick, ", packet_ip:", packet_ip, ", packet_port:", packet_port)
-		return
+	var packet_port = svr_peer.get_packet_port()
 
-	var frame = svr_get_or_create_frame(packet.tick)
-	frame["inputs"].append(packet["input"])
-	svr_chk_broad_inputs(false)
+	svr_cli_input_buffer.append({
+		ip = packet_ip,
+		port = packet_port,
+		packet = packet
+	})
 
 	
 func svr_get_player_cnt():
-	return clients.size()
-	
-	
-func svr_start_game():
-	print("svr_start_game")
-	var packet = {
-		t = "g2c_gamestart",
-	}
-	svr_broad(packet)		
-	
-
-
-
-
-func svr_get_or_create_frame(tick):
-	var frame = svr_history_frames.get(tick)
-	if not frame:
-		frame = {
-			inputs = []
-		}
-		svr_history_frames[tick] = frame
-	return frame
+	return svr_clients.size()
 
 
 # Check client is registered
 func svr_has_cli(p_ip, p_port):
-	for client in clients:
+	for client in svr_clients:
 		if (client.ip == p_ip and client.port == p_port):
 			return true
 	return false
 
 
+
 #####################################################################
 # client code
 #####################################################################
+
 
 func cli_try_port():
 	var client_port = int(ctrl_port.get_value()) + 1
@@ -299,12 +295,12 @@ func cli_on_start():
 
 	while (not connected and attempts < CONNECT_ATTEMPTS):
 		attempts += 1
-		cli_peer.put_var({t = "c2g_connect"})
+		cli_peer.put_var({t = TT.c2g_connect})
 		OS.delay_msec(50)
 
 		while (cli_peer.get_available_packet_count() > 0):
 			var packet = cli_peer.get_var()
-			if (packet != null and packet.t == "g2c_connect"):
+			if (packet != null and packet.t == TT.g2c_connect):
 				connected = true
 				break
 
@@ -336,12 +332,6 @@ func cli_on_stop():
 	ctrl_start.set_disabled(false)
 
 
-func cli_start_game():
-	while cli_input_tick < cli_pre_send_input_cnt:
-		cli_send_input(cli_input_tick)
-		cli_input_tick += 1
-
-
 # warning-ignore:unused_argument
 func cli_cycle(delta):
 	cli_do_recv()
@@ -350,60 +340,63 @@ func cli_cycle(delta):
 
 # warning-ignore:unused_argument
 func cli_do_update(delta):
-	if cli_has_recv_frame and cli_game_start_time < 0:
-		cli_game_start_time = Time.get_ticks_msec()
-
-	# game not start yet
 	if cli_game_start_time < 0:
 		return
 
-	cli_tick_since_game_start = floor( (Time.get_ticks_msec() - cli_game_start_time) / UPDATE_DELTATIME)
+	var duration = 1.0 / NETWORK_FPS
+	if (net_sync_timer < duration):
+		net_sync_timer += delta
+		return
+	net_sync_timer = 0
 
 	# send inputs
-	while cli_input_tick <= cli_get_input_target_tick():
-		cli_send_input(cli_input_tick)
-		cli_input_tick += 1
+	cli_send_input()
 
-	# apply svr input
-	while cli_world_tick < cli_cur_svr_tick:
-		var inputs = cli_svr_frames.get(cli_world_tick)
-		if not inputs:
-			break
-		cli_apply_inputs(inputs)
-		cli_world_tick += 1
+	# apply inputs
+	var tmp_buf = cli_recv_input_buffer
+	cli_recv_input_buffer = []
 
-
-
-func cli_get_input_target_tick():
-	return (cli_tick_since_game_start + cli_pre_send_input_cnt)
+	for buf in tmp_buf:
+		var packet = buf.packet
+		var input = packet.input
+		if input.has("dir"):
+			$Player.apply_input(input.dir)	
 
 
 func cli_do_recv():
 	while cli_peer.get_available_packet_count() > 0:
 		var packet = cli_peer.get_var()
-		print("cli_do_recv, p: ", packet)
+		#print("cli_do_recv, p: ", packet)
 		if (packet == null):
 			continue
-		if packet.t == "g2c_gamestart":
+		if packet.t == TT.g2c_gamestart:
 			cli_on_g2c_gamestart(packet)
-		elif packet.t == "g2c_frame":
-			cli_on_g2c_frame(packet)
+		elif packet.t == TT.g2c_obj_update:
+			cli_on_g2c_obj_update(packet)
+		elif packet.t == TT.g2c_cli_input:
+			cli_on_g2c_cli_input(packet)
 
 
 # warning-ignore:unused_argument
 func cli_on_g2c_gamestart(packet):
 	print("cli_on_g2c_gamestart")
-	cli_start_game()
+	cli_game_start_time = Time.get_ticks_msec()
 	
 
-func cli_on_g2c_frame(packet):
-	cli_has_recv_frame = true
-	if not cli_svr_frames.has(packet.tick):
-		cli_svr_frames[packet.tick] = packet.inputs
-		cli_cur_svr_tick = max(cli_cur_svr_tick, packet.tick)
+func cli_on_g2c_obj_update(packet):
+	if (packet.seq > cli_seq):
+		cli_seq = packet.seq
+		for b in packet.balls:
+			var ball = get_node("balls/" + b. name)
+			ball.set_state(b)
 
 
-func cli_send_input(tick):
+func cli_on_g2c_cli_input(packet):
+	for input in packet.inputs:
+		cli_recv_input_buffer.append(input)
+
+
+func cli_send_input():
 	if is_client() and is_started:
 		var dir = Vector2.ZERO
 		if Input.is_action_pressed("move_right"):
@@ -417,21 +410,11 @@ func cli_send_input(tick):
 			
 		if dir.length() > 0:
 			dir = dir.normalized()
-			
-		var p = {
-			t = "c2g_input",
-			tick = tick,
-			input = {
-				dir = dir,
+			var p = {
+				t = TT.c2g_input,
+				input = {
+					dir = dir,
+				}
 			}
-		}
-		cli_peer.put_var(p)		
-		print("cli_send_input, p: ", p)		
-
-
-# Event handler
-func cli_apply_inputs(inputs):
-	for input in inputs:
-		if input.has("dir"):
-			print("cli_apply_inputs:", input)
-			$Player.apply_input(input.dir)
+			cli_peer.put_var(p)		
+			print("cli_send_input, p: ", p)		

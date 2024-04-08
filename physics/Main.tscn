@@ -2,7 +2,7 @@
 
 [ext_resource path="res://physics/Player.tscn" type="PackedScene" id=1]
 [ext_resource path="res://physics/Main.gd" type="Script" id=2]
-[ext_resource path="res://physics/Crate.tscn" type="PackedScene" id=3]
+[ext_resource path="res://physics/ball.tscn" type="PackedScene" id=3]
 
 [sub_resource type="RectangleShape2D" id=2]
 extents = Vector2( 522.5, 174 )
@@ -111,33 +111,33 @@ shape = SubResource( 4 )
 position = Vector2( 1002, 272 )
 shape = SubResource( 5 )
 
-[node name="crate" type="Node" parent="."]
+[node name="balls" type="Node" parent="."]
 
-[node name="Crate" parent="crate" instance=ExtResource( 3 )]
+[node name="ball1" parent="balls" instance=ExtResource( 3 )]
 position = Vector2( 971, -294 )
 
-[node name="Crate2" parent="crate" instance=ExtResource( 3 )]
+[node name="ball2" parent="balls" instance=ExtResource( 3 )]
 position = Vector2( 456, -102 )
 
-[node name="Crate3" parent="crate" instance=ExtResource( 3 )]
+[node name="ball3" parent="balls" instance=ExtResource( 3 )]
 position = Vector2( 468, 67 )
 
-[node name="Crate4" parent="crate" instance=ExtResource( 3 )]
+[node name="ball4" parent="balls" instance=ExtResource( 3 )]
 position = Vector2( 639, 75 )
 
-[node name="Crate5" parent="crate" instance=ExtResource( 3 )]
+[node name="ball5" parent="balls" instance=ExtResource( 3 )]
 position = Vector2( 830, 70 )
 
-[node name="Crate6" parent="crate" instance=ExtResource( 3 )]
+[node name="ball6" parent="balls" instance=ExtResource( 3 )]
 position = Vector2( 1007, 74 )
 
-[node name="Crate7" parent="crate" instance=ExtResource( 3 )]
+[node name="ball7" parent="balls" instance=ExtResource( 3 )]
 position = Vector2( 954, -183 )
 
-[node name="Crate8" parent="crate" instance=ExtResource( 3 )]
+[node name="ball8" parent="balls" instance=ExtResource( 3 )]
 position = Vector2( 717, -315 )
 
-[node name="Crate9" parent="crate" instance=ExtResource( 3 )]
+[node name="ball9" parent="balls" instance=ExtResource( 3 )]
 position = Vector2( 454, -260 )
 
 [connection signal="pressed" from="controls/start_button" to="." method="_on_start_button_pressed"]

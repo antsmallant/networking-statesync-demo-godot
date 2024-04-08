@@ -1,19 +1,15 @@
 extends RigidBody2D
 
-
-const HIT_FORCE : float = 10.0
 const ALPHA = 0.1
 const EPSILON = 0.0005
 const STATE_EXPIRATION_TIME = 1.0 / 20.0
 
-
-var screen_size
 var state = null
 var state_timer = 0
 
 
+# Called when the node enters the scene tree for the first time.
 func _ready():
-	screen_size = get_viewport_rect().size
 	set_can_sleep(false)
 
 
@@ -35,18 +31,9 @@ func _integrate_forces(s):
 		s.set_angular_velocity(state.angular_velocity)
 
 
-func _process(delta):
-	pass
-	
-		
 func set_state(p_state):
 	self.state = p_state
 	self.state_timer = 0
-
-
-func apply_input(dir):
-	if dir.length() > 0:
-		apply_impulse(Vector2(0, 0), dir.normalized() * HIT_FORCE)		
 
 
 # Lerp vector
@@ -72,5 +59,4 @@ func slerp(v1, v2, alpha):
 	var angle = acos(cos_angle)
 	var angle_alpha = angle * alpha
 	var v3 = (v2 - (cos_angle * v1)).normalized()
-	return v1 * cos(angle_alpha) + v3 * sin(angle_alpha)		
-		
+	return v1 * cos(angle_alpha) + v3 * sin(angle_alpha)
