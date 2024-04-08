@@ -28,12 +28,14 @@ var cli_peer = PacketPeerUDP.new()
 # For server
 var svr_clients = []
 var svr_cli_input_buffer := []
+var svr_cli_id := 0
 
 
 # For client
 var cli_game_start_time : int = -1
 var cli_seq := -1
 var cli_recv_input_buffer := []
+var cli_my_id = null
 
 
 # For both server and client
@@ -230,12 +232,14 @@ func svr_do_recv():
 func svr_on_c2g_connect(packet):
 	var packet_ip = svr_peer.get_packet_ip()
 	var packet_port = svr_peer.get_packet_port()
+	var cli_id = svr_cli_id
+	svr_cli_id = svr_cli_id+1
 	if (not svr_has_cli(packet_ip, packet_port)):
 		print("Client connected from ", packet_ip, ":", packet_port)
-		svr_clients.append({ ip = packet_ip, port = packet_port, seq = 0 })
+		svr_clients.append({ ip = packet_ip, port = packet_port, seq = 0, cli_id = cli_id})
 
 	svr_peer.set_dest_address(packet_ip, packet_port)
-	svr_peer.put_var({t = TT.g2c_connect})
+	svr_peer.put_var({t = TT.g2c_connect, cli_id = cli_id})
 
 	svr_peer.set_dest_address(packet_ip, packet_port)
 	svr_peer.put_var({t = TT.g2c_gamestart})
@@ -302,6 +306,7 @@ func cli_on_start():
 			var packet = cli_peer.get_var()
 			if (packet != null and packet.t == TT.g2c_connect):
 				connected = true
+				cli_my_id = packet.cli_id
 				break
 
 	if (not connected):
@@ -358,9 +363,10 @@ func cli_do_update(delta):
 
 	for buf in tmp_buf:
 		var packet = buf.packet
-		var input = packet.input
-		if input.has("dir"):
-			$Player.apply_input(input.dir)	
+		if packet.cli_id != cli_my_id:
+			var input = packet.input
+			if input.has("dir"):
+				$Player.apply_input(input.dir)	
 
 
 func cli_do_recv():
@@ -387,8 +393,9 @@ func cli_on_g2c_obj_update(packet):
 	if (packet.seq > cli_seq):
 		cli_seq = packet.seq
 		for b in packet.balls:
-			var ball = get_node("balls/" + b. name)
+			var ball = get_node("balls/" + b.name)
 			ball.set_state(b)
+		ctrl_player.set_state(packet.player)
 
 
 func cli_on_g2c_cli_input(packet):
@@ -412,9 +419,13 @@ func cli_send_input():
 			dir = dir.normalized()
 			var p = {
 				t = TT.c2g_input,
+				cli_id = cli_my_id,
 				input = {
 					dir = dir,
 				}
 			}
 			cli_peer.put_var(p)		
 			print("cli_send_input, p: ", p)		
+
+			# apply self
+			$Player.apply_input(dir)
